@@ -15,7 +15,13 @@
 [![No Account](https://img.shields.io/badge/account-not%20required-FFC300?style=flat-square&logo=circle-check)](docs/usage.md)
 [![Price: $0](https://img.shields.io/badge/price-%240-0F1115?style=flat-square&logo=handshake)](LICENSE)
 
-- **[⬇ Download & Install](#getting-started)**
+> **🍴 Fork — personal use only.** This repository is a fork of
+> [Myna](https://github.com/fmflurry/myna) (upstream, by fmflurry), kept for
+> private/personal use. It is **not** a public release channel — build from
+> source below. Upstream issues and releases live at the
+> upstream repo, not here.
+
+- **[⬇ Build & Install from source](#getting-started)**
 - [Showcase](#showcase)
 - [Features](#features)
 - [Privacy](#privacy-recording--transcription-stay-local)
@@ -29,7 +35,7 @@
 
 <p align="center">
   <strong>Hit Record. Get transcript + summary. Nothing leaves your Mac.</strong><br>
-  <a href="https://github.com/fmflurry/myna/releases">⬇ Download the .dmg</a> ·
+  <a href="#getting-started">Build from source</a> ·
   <a href="docs/usage.md">Usage guide</a>
 </p>
 
@@ -161,21 +167,23 @@ your machine does the work.
 
 ## Getting Started
 
+This fork is for **personal use**, so install by building from source
+(rather than downloading a prebuilt `.dmg` from upstream). The commands
+below build *this* fork — including any fork-specific changes.
+
 **macOS only** (Windows/Linux untested — see Roadmap).
 
-1. Download the `.dmg` from [GitHub Releases](https://github.com/fmflurry/myna/releases),
-   drag to Applications, launch.
-2. Unsigned build (not notarized): if macOS says *"damaged"*,
-   run `xattr -dr com.apple.quarantine /Applications/Myna.app`.
+1. Build and run the unsigned app (not notarized): if macOS says
+   *"damaged"*, run `xattr -dr com.apple.quarantine /Applications/Myna.app`.
    Mic permission re-asks after each update (ad-hoc signature).
-3. Onboarding: grant **Microphone** (always) and
+2. Onboarding: grant **Microphone** (always) and
    **Screen & System Audio Recording** (system/mixed only,
    macOS 14.4+, restart after granting).
    Click **Download** for models (~5.4 GB, one time).
    Decline update checks with no loss.
    Later updates: click **Update** in Settings; you'll be asked to
    re-grant the microphone after restart (ad-hoc signature).
-4. Hit **Record**, watch live captions, **Stop**, then **Summarize**.
+3. Hit **Record**, watch live captions, **Stop**, then **Summarize**.
 
 From source: `npm install && npm --prefix ui install && npx tauri dev`.
 Release: `npx tauri build`.
