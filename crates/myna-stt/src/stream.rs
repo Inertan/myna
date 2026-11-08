@@ -110,7 +110,7 @@ const PRE_ROLL_SEC: f32 = 0.3;
 /// exact cap sample risks bisecting a word mid-utterance, `split_into_chunks`
 /// additionally searches backward from the cap (see
 /// [`SILENCE_SEARCH_WINDOW_SEC`]) for a quieter point to cut at instead.
-const MAX_DECODE_CHUNK_SEC: f32 = 5.0;
+pub(crate) const MAX_DECODE_CHUNK_SEC: f32 = 5.0;
 
 /// Hard cap, in seconds, on how much audio [`SimulatedStreamer`]'s
 /// in-progress utterance `buffer` may retain while a VAD segment is open.
@@ -426,12 +426,23 @@ pub struct StreamerOptions {
     /// existing callers (`SimulatedStreamer::new`) keep today's
     /// always-emit-partials behaviour unchanged.
     pub emit_partials: bool,
+    /// Longest window, in seconds, handed to the decoder in one call.
+    ///
+    /// `None` (the default) derives it from the loaded model via
+    /// [`crate::models::SttModelSpec::decode_window_sec`] — the only sane
+    /// choice, because the two model families fail in opposite directions:
+    /// Parakeet-TDT drifts into English past ~5 s, while Whisper needs long
+    /// windows (it discards everything past 30 s and hallucinates subtitle
+    /// boilerplate on short silence-heavy ones). An explicit `Some(_)` is an
+    /// escape hatch for tests and benchmarks.
+    pub decode_window_sec: Option<f32>,
 }
 
 impl Default for StreamerOptions {
     fn default() -> Self {
         Self {
             emit_partials: true,
+            decode_window_sec: None,
         }
     }
 }
@@ -466,6 +477,8 @@ pub enum SttEvent {
 pub struct SimulatedStreamer {
     engine: Arc<SttEngine>,
     vad: VadSegmenter,
+    /// Resolved from [`StreamerOptions::decode_window_sec`] or the model.
+    decode_window_sec: f32,
     /// Raw samples of the current in-progress utterance.
     buffer: Vec<f32>,
     /// Number of samples at the front of `buffer` already fed to the VAD.
@@ -514,9 +527,13 @@ impl SimulatedStreamer {
         options: StreamerOptions,
     ) -> Result<Self, SttError> {
         let vad = VadSegmenter::load(vad_cfg)?;
+        let decode_window_sec = options
+            .decode_window_sec
+            .unwrap_or_else(|| engine.spec().decode_window_sec());
         Ok(Self {
             engine,
             vad,
+            decode_window_sec,
             buffer: Vec::new(),
             offset: 0,
             buffer_start_sample: 0,
@@ -598,9 +615,14 @@ impl SimulatedStreamer {
     /// [`Self::reset_utterance`] drops fed-but-never-decoded audio and
     /// would therefore discard a second segment completing in the same
     /// push outright (see [`decoded_prefix_skip`]).
+    /// [`Self::decode_window_sec`] in samples at the VAD's target rate.
+    fn decode_window_samples(&self) -> usize {
+        (self.decode_window_sec * TARGET_SAMPLE_RATE as f32) as usize
+    }
+
     fn drain_finals(&mut self) -> Result<Vec<SttEvent>, SttError> {
         let mut events = Vec::new();
-        let cap_samples = (MAX_DECODE_CHUNK_SEC * TARGET_SAMPLE_RATE as f32) as usize;
+        let cap_samples = self.decode_window_samples();
         for (start_sample, samples) in self.vad.drain_segments() {
             // `decoded_upto` is exactly the first sample not yet emitted
             // as a Final, so it is the right cut point for skipping the
@@ -666,9 +688,11 @@ impl SimulatedStreamer {
     /// keeps in transcript order.
     fn force_drain_overflow(&mut self) -> Result<Vec<SttEvent>, SttError> {
         let mut events = Vec::new();
-        let cap_samples = (MAX_DECODE_CHUNK_SEC * TARGET_SAMPLE_RATE as f32) as usize;
+        let chunk_samples = self.decode_window_samples();
+        let cap_samples = chunk_samples;
         while let Some((start_sample, drained)) = utterance_cap_drain(
             self.speech_started,
+            chunk_samples,
             &mut self.buffer,
             &mut self.offset,
             &mut self.buffer_start_sample,
@@ -973,6 +997,7 @@ fn decoded_prefix_skip(decoded_upto: usize, start_sample: usize, segment_len: us
 /// single oversized push.
 fn utterance_cap_drain(
     speech_started: bool,
+    chunk_samples: usize,
     buffer: &mut Vec<f32>,
     fed_offset: &mut usize,
     buffer_start_sample: &mut usize,
@@ -984,7 +1009,6 @@ fn utterance_cap_drain(
     if buffer.len() <= cap_samples {
         return None;
     }
-    let chunk_samples = (MAX_DECODE_CHUNK_SEC * TARGET_SAMPLE_RATE as f32) as usize;
     let drain_count = chunk_samples.min(*fed_offset);
     if drain_count == 0 {
         return None;
@@ -1152,6 +1176,12 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+
+    /// The cap the streamer used before it became model-dependent — the
+    /// value these unit tests were written against.
+    fn test_chunk_samples() -> usize {
+        (MAX_DECODE_CHUNK_SEC * TARGET_SAMPLE_RATE as f32) as usize
+    }
 
     fn window_samples() -> usize {
         (PARTIAL_WINDOW_SEC * TARGET_SAMPLE_RATE as f32) as usize
@@ -1553,6 +1583,7 @@ mod tests {
     fn should_emit_partial_returns_true_when_enabled_and_both_existing_gates_pass() {
         let options = StreamerOptions {
             emit_partials: true,
+            ..StreamerOptions::default()
         };
 
         assert!(should_emit_partial(&options, true, true));
@@ -1562,6 +1593,7 @@ mod tests {
     fn should_emit_partial_returns_false_when_emit_partials_is_disabled_even_if_other_gates_pass() {
         let options = StreamerOptions {
             emit_partials: false,
+            ..StreamerOptions::default()
         };
 
         assert!(
@@ -1575,6 +1607,7 @@ mod tests {
     {
         let options = StreamerOptions {
             emit_partials: true,
+            ..StreamerOptions::default()
         };
 
         assert!(
@@ -1609,6 +1642,7 @@ mod tests {
         };
         let options = StreamerOptions {
             emit_partials: false,
+            ..StreamerOptions::default()
         };
 
         let mut streamer =
@@ -1964,6 +1998,7 @@ mod tests {
             // `force_drain_overflow()` after `drain_finals()`.
             while let Some((start_sample, drained)) = utterance_cap_drain(
                 speech_started,
+                test_chunk_samples(),
                 &mut buffer,
                 &mut fed_offset,
                 &mut buffer_start_sample,
@@ -2011,7 +2046,14 @@ mod tests {
         let mut fed = below_cap.len();
         let mut start = 0usize;
         assert!(
-            utterance_cap_drain(true, &mut below_cap, &mut fed, &mut start).is_none(),
+            utterance_cap_drain(
+                true,
+                test_chunk_samples(),
+                &mut below_cap,
+                &mut fed,
+                &mut start
+            )
+            .is_none(),
             "a 29.9s utterance is below the 30s cap and must not be touched"
         );
         assert_eq!(start, 0);
@@ -2020,7 +2062,8 @@ mod tests {
         let mut fed = idle.len();
         let mut start = 0usize;
         assert!(
-            utterance_cap_drain(false, &mut idle, &mut fed, &mut start).is_none(),
+            utterance_cap_drain(false, test_chunk_samples(), &mut idle, &mut fed, &mut start)
+                .is_none(),
             "while idle, retention is trim_leading_silence's job, not the cap's"
         );
         assert_eq!(idle.len(), samples(31.0));
@@ -2029,7 +2072,8 @@ mod tests {
         let mut fed = 0usize;
         let mut start = 0usize;
         assert!(
-            utterance_cap_drain(true, &mut unfed, &mut fed, &mut start).is_none(),
+            utterance_cap_drain(true, test_chunk_samples(), &mut unfed, &mut fed, &mut start)
+                .is_none(),
             "samples the VAD has not seen yet must never be detached"
         );
         assert_eq!(unfed.len(), samples(31.0));
@@ -2122,9 +2166,14 @@ mod tests {
         let mut buffer: Vec<f32> = flat_buffer_of_amplitude(31.0, 0.05);
         let mut fed_offset = buffer.len();
         let mut buffer_start_sample = 0usize;
-        let (drain_start, drained) =
-            utterance_cap_drain(true, &mut buffer, &mut fed_offset, &mut buffer_start_sample)
-                .expect("31s of speech is over the 30s cap");
+        let (drain_start, drained) = utterance_cap_drain(
+            true,
+            test_chunk_samples(),
+            &mut buffer,
+            &mut fed_offset,
+            &mut buffer_start_sample,
+        )
+        .expect("31s of speech is over the 30s cap");
         assert_eq!(drain_start, 0);
         assert_eq!(drained.len(), samples(MAX_DECODE_CHUNK_SEC));
         // The watermark `force_drain_overflow` sets after decoding the

@@ -1,5 +1,5 @@
-//! `myna-stt`: offline Parakeet-TDT decoding and VAD-segmented simulated
-//! streaming for Myna.
+//! `myna-stt`: offline ASR (Parakeet-TDT or Whisper, see [`models`]) and
+//! VAD-segmented simulated streaming for Myna.
 //!
 //! This crate does no I/O beyond model and WAV file loading — no printing,
 //! no audio capture, no threads. Callers (the `myna-stt` binary, or the
@@ -15,6 +15,7 @@ mod diarize;
 mod diarize_eval;
 mod engine;
 mod error;
+mod models;
 mod relabel;
 mod stream;
 mod suspect;
@@ -39,6 +40,10 @@ pub use engine::{
     MODIFIED_BEAM_SEARCH,
 };
 pub use error::SttError;
+pub use models::{
+    default_model, model_by_dir, model_by_id, SttModelKind, SttModelSpec, AUTO_LANGUAGE,
+    PARAKEET_TDT_V3, STT_MODELS, WHISPER_TURBO,
+};
 pub use relabel::{
     relabel_others, relabel_others_with_config, relabel_others_word_level,
     MIN_DIARIZED_SEGMENT_SEC, MIN_SPEAKER_COVERAGE,

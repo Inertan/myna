@@ -20,6 +20,7 @@ pub mod session_manifest;
 pub mod state;
 pub mod storage_prefs;
 pub mod store;
+pub mod stt_prefs;
 pub mod summary_prefs;
 pub mod template_prefs;
 pub mod update_prefs;
@@ -145,6 +146,9 @@ pub fn run() {
             commands::templates::set_template_prompt,
             commands::templates::reset_template_prompt,
             commands::languages::list_summary_languages,
+            commands::stt::list_stt_models,
+            commands::stt::get_transcription_prefs,
+            commands::stt::set_transcription_prefs,
             commands::summary::summarize_meeting,
             commands::summary::cancel_summarization,
             commands::summary::get_summary,

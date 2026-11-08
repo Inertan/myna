@@ -556,6 +556,7 @@ pub fn transcribe_tracks_streaming(
             vad_cfg,
             StreamerOptions {
                 emit_partials: false,
+                ..StreamerOptions::default()
             },
         )?;
 

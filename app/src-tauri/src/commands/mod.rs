@@ -11,6 +11,7 @@ pub mod models;
 pub mod placement;
 pub mod recording;
 pub mod storage;
+pub mod stt;
 pub mod summary;
 pub mod templates;
 pub mod update_install;

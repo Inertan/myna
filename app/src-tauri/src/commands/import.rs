@@ -946,6 +946,7 @@ fn build_streamer(
         &vad_cfg,
         StreamerOptions {
             emit_partials: false,
+            ..StreamerOptions::default()
         },
     )?)
 }

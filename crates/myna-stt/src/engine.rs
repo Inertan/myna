@@ -1,22 +1,22 @@
-//! Offline Parakeet-TDT decoding.
+//! Offline decoding for the registry's ASR models — Parakeet-TDT
+//! (transducer) and Whisper, chosen per [`SttConfig::spec`].
 
 use std::path::{Path, PathBuf};
 
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OfflineRecognizerResult,
-    OfflineTransducerModelConfig,
+    OfflineTransducerModelConfig, OfflineWhisperModelConfig,
 };
 
 use crate::detokenize::{detokenize, Word};
 use crate::error::SttError;
+use crate::models::{default_model, SttModelKind, SttModelSpec};
 use crate::transcript::{Speaker, Transcript, TranscriptSegment};
 use crate::wav::read_wav_to_f32;
 
-const ENCODER_FILE: &str = "encoder.int8.onnx";
-const DECODER_FILE: &str = "decoder.int8.onnx";
-const JOINER_FILE: &str = "joiner.int8.onnx";
-const TOKENS_FILE: &str = "tokens.txt";
 const MODEL_TYPE: &str = "nemo_transducer";
+/// `model_config.model_type` selecting sherpa-onnx's Whisper decoder.
+const WHISPER_MODEL_TYPE: &str = "whisper";
 
 /// Default `blank_penalty` passed to `sherpa_onnx::OfflineRecognizerConfig`.
 ///
@@ -51,6 +51,15 @@ pub const ALLOWED_DECODING_METHODS: [&str; 2] = [GREEDY_SEARCH, MODIFIED_BEAM_SE
 #[derive(Debug, Clone)]
 pub struct SttConfig {
     pub model_dir: PathBuf,
+    /// Which model family [`SttEngine::load`] builds. Chosen from the
+    /// registry in [`crate::models`]; it decides which artifacts are
+    /// required and whether [`Self::language`] means anything.
+    pub spec: &'static SttModelSpec,
+    /// Language pin, already validated against
+    /// [`SttModelSpec::languages`]. `None` means "let the model decide",
+    /// which for a transducer is the only supported behaviour and for
+    /// Whisper is its own language detection.
+    pub language: Option<String>,
     pub num_threads: i32,
     pub debug: bool,
     /// See [`DEFAULT_BLANK_PENALTY`].
@@ -67,6 +76,8 @@ impl Default for SttConfig {
     fn default() -> Self {
         Self {
             model_dir: PathBuf::new(),
+            spec: default_model(),
+            language: None,
             num_threads: 2,
             debug: false,
             blank_penalty: DEFAULT_BLANK_PENALTY,
@@ -75,9 +86,10 @@ impl Default for SttConfig {
     }
 }
 
-/// Offline Parakeet-TDT speech-to-text engine.
+/// Offline speech-to-text engine for one registry model.
 pub struct SttEngine {
     recognizer: OfflineRecognizer,
+    spec: &'static SttModelSpec,
 }
 
 impl SttEngine {
@@ -93,26 +105,66 @@ impl SttEngine {
             }
         }
 
-        let encoder = require_artifact(&cfg.model_dir, ENCODER_FILE)?;
-        let decoder = require_artifact(&cfg.model_dir, DECODER_FILE)?;
-        let joiner = require_artifact(&cfg.model_dir, JOINER_FILE)?;
-        let tokens = require_artifact(&cfg.model_dir, TOKENS_FILE)?;
+        let encoder = require_artifact(&cfg.model_dir, cfg.spec.encoder)?;
+        let decoder = require_artifact(&cfg.model_dir, cfg.spec.decoder)?;
+        let tokens = require_artifact(&cfg.model_dir, cfg.spec.tokens)?;
 
         let mut config = OfflineRecognizerConfig::default();
-        config.model_config.transducer = OfflineTransducerModelConfig {
-            encoder: Some(path_to_string(&encoder)),
-            decoder: Some(path_to_string(&decoder)),
-            joiner: Some(path_to_string(&joiner)),
-        };
+        match cfg.spec.kind {
+            SttModelKind::Transducer => {
+                let joiner_file = cfg
+                    .spec
+                    .joiner
+                    .expect("transducer models always carry a joiner (see models::SttModelSpec)");
+                let joiner = require_artifact(&cfg.model_dir, joiner_file)?;
+
+                config.model_config.transducer = OfflineTransducerModelConfig {
+                    encoder: Some(path_to_string(&encoder)),
+                    decoder: Some(path_to_string(&decoder)),
+                    joiner: Some(path_to_string(&joiner)),
+                };
+                config.model_config.model_type = Some(MODEL_TYPE.into());
+                // Transducer-only knobs. Whisper has neither a blank-token
+                // penalty nor a selectable decoding method, and sherpa-onnx
+                // kills the process on an unrecognized method, so these are
+                // deliberately never set on the Whisper path.
+                config.blank_penalty = cfg.blank_penalty;
+                config.decoding_method = cfg.decoding_method.clone();
+            }
+            SttModelKind::Whisper => {
+                config.model_config.whisper = OfflineWhisperModelConfig {
+                    encoder: Some(path_to_string(&encoder)),
+                    decoder: Some(path_to_string(&decoder)),
+                    // `None` leaves language detection to Whisper.
+                    language: cfg.language.clone(),
+                    task: Some("transcribe".to_string()),
+                    tail_paddings: -1,
+                    // Per-token timestamps are what `words_from_result` turns
+                    // into per-word segments; without them every decode
+                    // window collapses into one long segment.
+                    enable_token_timestamps: true,
+                    enable_segment_timestamps: false,
+                };
+                config.model_config.model_type = Some(WHISPER_MODEL_TYPE.into());
+            }
+        }
         config.model_config.tokens = Some(path_to_string(&tokens));
-        config.model_config.model_type = Some(MODEL_TYPE.into());
         config.model_config.num_threads = cfg.num_threads;
         config.model_config.debug = cfg.debug;
-        config.blank_penalty = cfg.blank_penalty;
-        config.decoding_method = cfg.decoding_method.clone();
 
         let recognizer = OfflineRecognizer::create(&config).ok_or(SttError::RecognizerInit)?;
-        Ok(Self { recognizer })
+        Ok(Self {
+            recognizer,
+            spec: cfg.spec,
+        })
+    }
+
+    /// The registry entry this engine was loaded for.
+    ///
+    /// [`crate::stream::SimulatedStreamer`] reads it to size its decode
+    /// window per model instead of assuming one global cap.
+    pub fn spec(&self) -> &'static SttModelSpec {
+        self.spec
     }
 
     /// Transcribes raw `samples` at `sample_rate`, returning plain text.
@@ -225,7 +277,30 @@ fn segments_from_result(
 fn words_from_result(result: &OfflineRecognizerResult, duration_sec: f32) -> Vec<Word> {
     match (&result.timestamps, &result.durations) {
         (Some(timestamps), Some(durations)) if !timestamps.is_empty() => {
-            detokenize(&result.tokens, timestamps, durations)
+            // Whisper emits its markers as ordinary tokens when token
+            // timestamps are on (`<|0.00|>`, `<|transcribe|>`, ...).
+            // Left in, `detokenize` would glue them onto a neighbouring
+            // word and the transcript would show them verbatim. Parakeet
+            // tokens never look like this, so the filter is safe for both.
+            let mut tokens = Vec::with_capacity(result.tokens.len());
+            let mut kept_timestamps = Vec::with_capacity(timestamps.len());
+            let mut kept_durations = Vec::with_capacity(durations.len());
+
+            for ((token, start), duration) in result
+                .tokens
+                .iter()
+                .zip(timestamps.iter())
+                .zip(durations.iter())
+            {
+                if is_special_token(token) {
+                    continue;
+                }
+                tokens.push(token.clone());
+                kept_timestamps.push(*start);
+                kept_durations.push(*duration);
+            }
+
+            detokenize(&tokens, &kept_timestamps, &kept_durations)
         }
         _ => vec![Word {
             text: result.text.clone(),
@@ -233,6 +308,12 @@ fn words_from_result(result: &OfflineRecognizerResult, duration_sec: f32) -> Vec
             end_sec: duration_sec,
         }],
     }
+}
+
+/// Whether `token` is a model marker rather than text — Whisper wraps its
+/// markers in `<|...|>`.
+fn is_special_token(token: &str) -> bool {
+    token.starts_with("<|") && token.ends_with("|>")
 }
 
 #[cfg(test)]

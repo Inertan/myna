@@ -230,6 +230,38 @@ pub struct SummaryLanguageDto {
     pub label: String,
 }
 
+/// One transcription model, IPC-facing.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SttModelDto {
+    pub id: String,
+    pub label: String,
+    /// Accepted `language` values, always including `"auto"`.
+    pub languages: Vec<String>,
+    /// Whether the model takes an explicit language. `false` means the
+    /// language dropdown must be disabled for it.
+    pub language_pin: bool,
+    /// Whether every artifact of this model is already on disk.
+    pub downloaded: bool,
+}
+
+/// Persisted transcription settings, IPC-facing.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptionPrefsDto {
+    pub model: String,
+    pub language: String,
+}
+
+impl From<crate::stt_prefs::TranscriptionPrefs> for TranscriptionPrefsDto {
+    fn from(prefs: crate::stt_prefs::TranscriptionPrefs) -> Self {
+        Self {
+            model: prefs.model,
+            language: prefs.language,
+        }
+    }
+}
+
 /// Pointer to a generated summary, IPC-facing.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]

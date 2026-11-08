@@ -17,10 +17,6 @@ use crate::session::RecordingSession;
 use crate::store::folder_store::FsFolderStore;
 use crate::store::fs_store::FsMeetingStore;
 
-/// Directory name (under the resolved models root) containing the
-/// Parakeet-TDT STT model artifacts.
-const STT_MODEL_DIR_NAME: &str = "parakeet-tdt-0.6b-v3-int8";
-
 /// Directory (under the resolved models root) containing the pyannote-3.0
 /// speaker-segmentation model artifact [`Diarizer`] loads, nested one level
 /// further than most other model dirs — see [`DIARIZE_SEG_FILE_NAME`].
@@ -275,6 +271,19 @@ impl<T> ModelSlot<T> {
         }
     }
 
+    /// Drops the cached model unconditionally — live references included.
+    ///
+    /// Used when the *configuration* changed (a different STT model or
+    /// language), not when the model went idle. A session already holding
+    /// an [`Arc`] keeps decoding on the weights it started with and
+    /// finishes correctly; the next acquire loads the newly selected ones.
+    /// Idle eviction deliberately does the opposite (it refuses while any
+    /// reference is live) because there the point is releasing memory, not
+    /// switching configuration.
+    fn clear(&self) {
+        *self.lock_current() = None;
+    }
+
     /// Poison recovery: a panic inside `load` (step 1) leaves the slot
     /// `None` (the assignment in step 2 never ran), and a panic during
     /// eviction leaves a plain `Option` assignment — neither can corrupt
@@ -326,6 +335,12 @@ pub struct AppState {
     /// [`AppState::evict_stt_if_idle`] once no session/import holds it and
     /// [`IDLE_MODEL_TTL`] has passed since its last use.
     stt_engine: ModelSlot<SttEngine>,
+    /// `"<model id>:<language>"` of the engine currently in
+    /// [`AppState::stt_engine`]. [`AppState::stt_engine`] compares it
+    /// against the persisted preferences on every acquire and drops the
+    /// cached engine when they differ, so switching model or language
+    /// takes effect on the next recording instead of needing a restart.
+    stt_config_key: Mutex<Option<String>>,
     /// Cached summarizer in an evictable slot: released at the end of
     /// every `run_summarization` via [`AppState::release_summarizer`].
     summarizer: ModelSlot<Summarizer>,
@@ -367,6 +382,7 @@ impl AppState {
             session: Mutex::new(None),
             stopping: Mutex::new(None),
             stt_engine: ModelSlot::new(),
+            stt_config_key: Mutex::new(None),
             summarizer: ModelSlot::new(),
             diarizer: ModelSlot::new(),
             cancel_summary: Arc::new(AtomicBool::new(false)),
@@ -395,9 +411,31 @@ impl AppState {
     /// weights. Reuse wins; [`AppState::touch_stt_last_used`] restarts the
     /// TTL countdown at the end of each operation instead.
     pub fn stt_engine(&self, app: &AppHandle) -> Result<Arc<SttEngine>, AppError> {
+        let root = paths::data_root().map_err(|err| AppError::Path(err.to_string()))?;
+        let prefs = crate::stt_prefs::load(&root);
+        // `stt_prefs::load` normalizes, so the id is always known; the
+        // fallback is belt-and-braces against a future registry change.
+        let spec = myna_stt::model_by_id(&prefs.model).unwrap_or_else(myna_stt::default_model);
+        let config_key = format!("{}:{}", spec.id, prefs.language);
+
+        {
+            let mut current_key = self
+                .stt_config_key
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if current_key.as_deref() != Some(config_key.as_str()) {
+                *current_key = Some(config_key);
+                // A different model or language means the cached engine
+                // would decode with the old weights and the old pin.
+                self.stt_engine.clear();
+            }
+        }
+
         self.stt_engine.get_or_load(|| {
             Ok(Arc::new(SttEngine::load(&SttConfig {
-                model_dir: paths::models_root(app).join(STT_MODEL_DIR_NAME),
+                model_dir: paths::models_root(app).join(spec.dir),
+                spec,
+                language: spec.decode_language(&prefs.language),
                 num_threads: stt_engine_threads(),
                 debug: false,
                 ..SttConfig::default()
