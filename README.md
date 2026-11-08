@@ -15,7 +15,7 @@
 [![No Account](https://img.shields.io/badge/account-not%20required-FFC300?style=flat-square&logo=circle-check)](docs/usage.md)
 [![Price: $0](https://img.shields.io/badge/price-%240-0F1115?style=flat-square&logo=handshake)](LICENSE)
 
-> **🍴 Fork — personal use only.** This repository is a fork of
+> This repository is a fork of
 > [Myna](https://github.com/fmflurry/myna) (upstream, by fmflurry), kept for
 > personal use. Upstream issues and releases live at the
 > upstream repo, not here.
