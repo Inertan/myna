@@ -6,6 +6,7 @@ import type { ModelsStatus } from '../modules/meetings/core/models/models-status
 import type { Summary } from '../modules/meetings/core/models/summary.model';
 import type { SummaryLanguage } from '../modules/meetings/core/models/summary-language.model';
 import type { SummaryTemplate } from '../modules/meetings/core/models/summary-template.model';
+import type { SttModel } from '../modules/meetings/core/models/transcription.model';
 import type { TranscriptSegment } from '../modules/meetings/core/models/transcript.model';
 
 /**
@@ -179,6 +180,26 @@ export function makeScreenshotSummaryLanguages(): readonly SummaryLanguage[] {
   return [
     { code: 'en', label: 'English' },
     { code: 'fr', label: 'Français' },
+  ];
+}
+
+/** Seeded ASR models for the settings-modal screenshots — the same registry the Rust core lists. */
+export function makeScreenshotSttModels(): readonly SttModel[] {
+  return [
+    {
+      id: 'parakeet-tdt-0.6b-v3-int8',
+      label: 'Parakeet-TDT v3',
+      languages: ['auto'],
+      languagePin: false,
+      downloaded: true,
+    },
+    {
+      id: 'whisper-turbo-int8',
+      label: 'Whisper large-v3-turbo',
+      languages: ['auto', 'en', 'ru'],
+      languagePin: true,
+      downloaded: true,
+    },
   ];
 }
 

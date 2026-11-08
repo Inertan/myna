@@ -1,14 +1,16 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 
 import type { SummaryLanguage } from '../../../core/models/summary-language.model';
+import { DEFAULT_TRANSCRIPTION_LANGUAGE_CODE, type SttModel } from '../../../core/models/transcription.model';
 import type { UpdateCheck, UpdateConsent } from '../../../core/models/update.model';
 
 /**
  * The minimal honest settings surface: only controls whose state is fully
  * wired to the facade render here — update-check consent + manual check
- * (same semantics as About > Updates), the summary output language, and the
- * general summary guidelines (save-on-blur plus an explicit Save button that
- * stays disabled while unchanged).
+ * (same semantics as About > Updates), the summary output language, the
+ * transcription model/language, and the general summary guidelines
+ * (save-on-blur plus an explicit Save button that stays disabled while
+ * unchanged).
  * Injects nothing; the shell owns every `MeetingsFacade` call.
  */
 @Component({
@@ -27,6 +29,10 @@ export class SettingsComponent {
   /** The Rust-owned language list (`SummarizerPort.listLanguages()` via the store) — never a second hardcoded copy. */
   readonly summaryLanguages = input<readonly SummaryLanguage[]>([]);
   readonly selectedSummaryLanguage = input.required<string>();
+  /** The Rust-owned ASR model list (`TranscriptionPort.listModels()` via the store) — never a second hardcoded copy. */
+  readonly transcriptionModels = input<readonly SttModel[]>([]);
+  readonly selectedTranscriptionModel = input<string>('');
+  readonly selectedTranscriptionLanguage = input<string>(DEFAULT_TRANSCRIPTION_LANGUAGE_CODE);
   /** The persisted general summary guidelines (`facade.summaryGuidelines()` via the shell); `''` until loaded. */
   readonly guidelines = input('');
   /**
@@ -46,6 +52,10 @@ export class SettingsComponent {
   readonly updateConsentChanged = output<UpdateConsent>();
   readonly checkNowRequested = output<void>();
   readonly summaryLanguageSelected = output<string>();
+  /** The chosen ASR model id; emitted on change — the shell persists it, never this component. */
+  readonly transcriptionModelSelected = output<string>();
+  /** The chosen spoken-language code; emitted on change — the shell persists it, never this component. */
+  readonly transcriptionLanguageSelected = output<string>();
   /** The trimmed guidelines text; emitted on blur and on Save — the shell persists it, never this component. */
   readonly guidelinesChanged = output<string>();
   /**
@@ -65,6 +75,20 @@ export class SettingsComponent {
   protected readonly checkNowDisabled = computed(() => this.checking() || this.recording());
   /** Session-only: no timestamp exists in `UpdateCheck`, so this never claims a precise elapsed time — just whether a check has run since launch. */
   protected readonly lastCheckedLabel = computed(() => (this.lastCheck() === undefined ? 'Not this session' : 'Just now'));
+  /** The selected model's Rust-declared capabilities; `undefined` until the model list/prefs load. */
+  protected readonly selectedTranscriptionModelInfo = computed(() =>
+    this.transcriptionModels().find((model) => model.id === this.selectedTranscriptionModel()),
+  );
+  protected readonly transcriptionLanguages = computed(() => this.selectedTranscriptionModelInfo()?.languages ?? []);
+  /** A model with `languagePin: false` (Parakeet) ignores language entirely, so the picker must be disabled. */
+  protected readonly transcriptionLanguageDisabled = computed(() => {
+    const model = this.selectedTranscriptionModelInfo();
+    return model === undefined || !model.languagePin;
+  });
+  protected readonly transcriptionModelNotDownloaded = computed(() => {
+    const model = this.selectedTranscriptionModelInfo();
+    return model !== undefined && !model.downloaded;
+  });
 
   /** Uncommitted textarea value, bound to the guidelines text it started from — a later input change can never clobber typing, and vice versa. */
   private readonly guidelinesEdit = signal<{ readonly source: string; readonly value: string } | null>(null);
@@ -89,6 +113,14 @@ export class SettingsComponent {
 
   onSummaryLanguageChanged(event: Event): void {
     this.summaryLanguageSelected.emit((event.target as HTMLSelectElement).value);
+  }
+
+  onTranscriptionModelChanged(event: Event): void {
+    this.transcriptionModelSelected.emit((event.target as HTMLSelectElement).value);
+  }
+
+  onTranscriptionLanguageChanged(event: Event): void {
+    this.transcriptionLanguageSelected.emit((event.target as HTMLSelectElement).value);
   }
 
   onGuidelinesInput(event: Event): void {

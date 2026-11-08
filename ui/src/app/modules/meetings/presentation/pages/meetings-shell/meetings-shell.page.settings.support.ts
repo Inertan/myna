@@ -60,6 +60,9 @@ export function createSettingsControls(
   const storageSignals = facade as Partial<
     Pick<MeetingsFacade, 'storageLocation' | 'loadStorageLocation' | 'setStorageLocation' | 'resetStorageLocation'>
   >;
+  // Optional: shell specs that stub the facade with member subsets predate
+  // transcription wiring — a missing loader degrades to a no-op, never throws.
+  const transcriptionSignals = facade as Partial<Pick<MeetingsFacade, 'loadTranscriptionSettings'>>;
   const storageWorking = signal(false);
   const moveExistingChoice = signal(true);
   const storagePath = computed(() => storageSignals.storageLocation?.()?.path);
@@ -79,6 +82,7 @@ export function createSettingsControls(
     showAbout.set(false);
     showSettings.set(true);
     void storageSignals.loadStorageLocation?.();
+    void transcriptionSignals.loadTranscriptionSettings?.();
   };
   const closeSettings = (): void => showSettings.set(false);
   const toggleSettings = (): void => (showSettings() ? closeSettings() : openSettings());

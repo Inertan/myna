@@ -15,6 +15,7 @@ import { StorageLocationPort } from './core/ports/storage-location.port';
 import { SummarizerPort } from './core/ports/summarizer.port';
 import { TemplateRepositoryPort } from './core/ports/template-repository.port';
 import { TranscriberPort } from './core/ports/transcriber.port';
+import { TranscriptionPort } from './core/ports/transcription.port';
 import { UpdatesPort } from './core/ports/updates.port';
 import { LocalStoragePreferencesAdapter } from './infrastructure/local-storage-preferences.adapter';
 import { TauriAppInfoAdapter } from './infrastructure/tauri/tauri-app-info.adapter';
@@ -29,6 +30,7 @@ import { TauriRecorderAdapter } from './infrastructure/tauri/tauri-recorder.adap
 import { TauriSummarizerAdapter } from './infrastructure/tauri/tauri-summarizer.adapter';
 import { TauriTemplateRepositoryAdapter } from './infrastructure/tauri/tauri-template-repository.adapter';
 import { TauriTranscriberAdapter } from './infrastructure/tauri/tauri-transcriber.adapter';
+import { TauriTranscriptionAdapter } from './infrastructure/tauri/tauri-transcription.adapter';
 import { TauriUpdatesAdapter } from './infrastructure/tauri/tauri-updates.adapter';
 import { CancelImportUseCase } from './application/use-cases/cancel-import.usecase';
 import { CancelRecordingUseCase } from './application/use-cases/cancel-recording.usecase';
@@ -51,6 +53,7 @@ import { GetStorageLocationUseCase } from './application/use-cases/get-storage-l
 import { GetSummaryGuidelinesUseCase } from './application/use-cases/get-summary-guidelines.usecase';
 import { GetSummaryUseCase } from './application/use-cases/get-summary.usecase';
 import { GetTemplatePromptUseCase } from './application/use-cases/get-template-prompt.usecase';
+import { GetTranscriptionPrefsUseCase } from './application/use-cases/get-transcription-prefs.usecase';
 import { GetUpdateConsentUseCase } from './application/use-cases/get-update-consent.usecase';
 import { ImportAudioUseCase } from './application/use-cases/import-audio.usecase';
 import { InitializeModelsUseCase } from './application/use-cases/initialize-models.usecase';
@@ -58,6 +61,7 @@ import { ListAudioSourcesUseCase } from './application/use-cases/list-audio-sour
 import { ListDevicesUseCase } from './application/use-cases/list-devices.usecase';
 import { ListFoldersUseCase } from './application/use-cases/list-folders.usecase';
 import { ListMeetingsUseCase } from './application/use-cases/list-meetings.usecase';
+import { ListSttModelsUseCase } from './application/use-cases/list-stt-models.usecase';
 import { ListSummaryLanguagesUseCase } from './application/use-cases/list-summary-languages.usecase';
 import { ListTemplatesUseCase } from './application/use-cases/list-templates.usecase';
 import { MergeTranscriptSegmentUpUseCase } from './application/use-cases/merge-transcript-segment-up.usecase';
@@ -76,6 +80,7 @@ import { SetStorageLocationUseCase } from './application/use-cases/set-storage-l
 import { SetSummaryGuidelinesUseCase } from './application/use-cases/set-summary-guidelines.usecase';
 import { SetSegmentSpeakerUseCase } from './application/use-cases/set-segment-speaker.usecase';
 import { SetTemplatePromptUseCase } from './application/use-cases/set-template-prompt.usecase';
+import { SetTranscriptionPrefsUseCase } from './application/use-cases/set-transcription-prefs.usecase';
 import { SetUpdateConsentUseCase } from './application/use-cases/set-update-consent.usecase';
 import { StartRecordingUseCase } from './application/use-cases/start-recording.usecase';
 import { StopRecordingUseCase } from './application/use-cases/stop-recording.usecase';
@@ -103,6 +108,7 @@ export function provideMeetings(): EnvironmentProviders {
     { provide: RecorderPort, useClass: TauriRecorderAdapter },
     { provide: TranscriberPort, useClass: TauriTranscriberAdapter },
     { provide: SummarizerPort, useClass: TauriSummarizerAdapter },
+    { provide: TranscriptionPort, useClass: TauriTranscriptionAdapter },
     { provide: MeetingRepositoryPort, useClass: TauriMeetingRepositoryAdapter },
     { provide: FolderRepositoryPort, useClass: TauriFolderRepositoryAdapter },
     { provide: TemplateRepositoryPort, useClass: TauriTemplateRepositoryAdapter },
@@ -140,6 +146,9 @@ export function provideMeetings(): EnvironmentProviders {
     ExportMeetingUseCase,
     CheckSystemAudioUseCase,
     ListSummaryLanguagesUseCase,
+    ListSttModelsUseCase,
+    GetTranscriptionPrefsUseCase,
+    SetTranscriptionPrefsUseCase,
     GetSummaryGuidelinesUseCase,
     SetSummaryGuidelinesUseCase,
     GetSummaryUseCase,

@@ -1,4 +1,4 @@
-/* eslint max-lines: ["error", 452] */
+/* eslint max-lines: ["error", 480] */
 import { Injectable, computed, inject, type InjectionToken, type Signal } from '@angular/core';
 import { Store } from 'flurryx';
 
@@ -17,6 +17,12 @@ import type { Summary } from '../../core/models/summary.model';
 import type { SummaryInstructionsDraft } from '../../core/models/summary-instructions.model';
 import type { SummaryTemplate } from '../../core/models/summary-template.model';
 import type { TranscriptSegment } from '../../core/models/transcript.model';
+import {
+  DEFAULT_TRANSCRIPTION_LANGUAGE_CODE,
+  DEFAULT_TRANSCRIPTION_MODEL_ID,
+  type SttModel,
+  type TranscriptionPrefs,
+} from '../../core/models/transcription.model';
 import { AudioImportPort, type ImportProgress } from '../../core/ports/audio-import.port';
 import { PreferencesPort } from '../../core/ports/preferences.port';
 import { RecorderPort } from '../../core/ports/recorder.port';
@@ -144,6 +150,16 @@ export class MeetingsStore {
    * preferences backend) — never re-read on every access.
    */
   readonly selectedSummaryLanguage: Signal<string> = computed(() => this.slots.get('SELECTED_SUMMARY_LANGUAGE')().data ?? DEFAULT_SUMMARY_LANGUAGE_CODE);
+  /** The Rust-owned ASR model registry, in dropdown order — never a second hardcoded copy. */
+  readonly transcriptionModels: Signal<readonly SttModel[]> = computed(() => this.slots.get('TRANSCRIPTION_MODELS')().data ?? []);
+  /**
+   * The model the NEXT recording will use, seeded from the server-side
+   * `get_transcription_prefs` when the settings surface loads — never
+   * re-read on every access.
+   */
+  readonly selectedTranscriptionModel: Signal<string> = computed(() => this.slots.get('SELECTED_TRANSCRIPTION_MODEL')().data ?? DEFAULT_TRANSCRIPTION_MODEL_ID);
+  /** The language the NEXT recording will use; server-persisted, unlike `selectedSummaryLanguage`. */
+  readonly selectedTranscriptionLanguage: Signal<string> = computed(() => this.slots.get('SELECTED_TRANSCRIPTION_LANGUAGE')().data ?? DEFAULT_TRANSCRIPTION_LANGUAGE_CODE);
   /** General summary guidelines; the server (via `SummarizerPort`) is the source of truth — this slot is a cache, never persisted. */
   readonly summaryGuidelines: Signal<string> = computed(() => this.slots.get('SUMMARY_GUIDELINES')().data ?? '');
   /** Per-(meeting, template, language) load state for persisted summaries fetched via `get_summary`. */
@@ -349,6 +365,17 @@ export class MeetingsStore {
   setSelectedSummaryLanguage(code: string): void {
     this.preferences.set(SUMMARY_LANGUAGE_PREFERENCE_KEY, code);
     this.slots.update('SELECTED_SUMMARY_LANGUAGE', { data: code, status: 'Success', isLoading: false });
+  }
+
+  setTranscriptionModels(models: readonly SttModel[]): void { this.slots.update('TRANSCRIPTION_MODELS', { data: models, status: 'Success', isLoading: false }); }
+
+  /**
+   * Applies the server-normalized pair to both selection slots. Persistence
+   * belongs to the facade's set use case — this store never writes it.
+   */
+  setTranscriptionPreferences(prefs: TranscriptionPrefs): void {
+    this.slots.update('SELECTED_TRANSCRIPTION_MODEL', { data: prefs.model, status: 'Success', isLoading: false });
+    this.slots.update('SELECTED_TRANSCRIPTION_LANGUAGE', { data: prefs.language, status: 'Success', isLoading: false });
   }
 
   /** Applies server-fetched guidelines to the slot; nothing is persisted here — the port owns durability. */

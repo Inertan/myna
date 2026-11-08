@@ -6,6 +6,7 @@ import type { ModelsStatusDto } from '../dto/models-status.dto';
 import type { RecordingStatePayloadDto } from '../dto/event-payload.dto';
 import type { SummaryDto, SummaryLanguageDto } from '../dto/summary.dto';
 import type { TemplateDto } from '../dto/template.dto';
+import type { SttModelDto, TranscriptionPrefsDto } from '../dto/transcription.dto';
 import type { TranscriptDto, TranscriptSegmentWireDto } from '../dto/transcript.dto';
 
 /**
@@ -35,6 +36,9 @@ export const COMMAND_NAMES = [
   'get_transcript',
   'list_templates',
   'list_summary_languages',
+  'list_stt_models',
+  'get_transcription_prefs',
+  'set_transcription_prefs',
   'summarize_meeting',
   'cancel_summarization',
   'models_status',
@@ -214,6 +218,12 @@ export interface CommandSignatures {
   /** Deletes a per-template prompt override, restoring the built-in prompt. Idempotent. */
   readonly reset_template_prompt: { args: { readonly name: string }; result: void };
   readonly list_summary_languages: { args: NoArgs; result: readonly SummaryLanguageDto[] };
+  readonly list_stt_models: { args: NoArgs; result: readonly SttModelDto[] };
+  readonly get_transcription_prefs: { args: NoArgs; result: TranscriptionPrefsDto };
+  readonly set_transcription_prefs: {
+    args: { readonly model: string; readonly language: string };
+    result: TranscriptionPrefsDto;
+  };
   readonly summarize_meeting: {
     args: {
       readonly meetingId: string;

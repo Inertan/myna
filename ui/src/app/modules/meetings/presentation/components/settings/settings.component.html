@@ -39,6 +39,45 @@
     </label>
   </section>
 
+  <section class="transcription" aria-label="Transcription">
+    <h3>Transcription</h3>
+    <label class="transcription-picker">
+      <span class="language-label">Speech-to-text model</span>
+      <select
+        class="transcription-model-select"
+        aria-label="Transcription model"
+        [disabled]="transcriptionModels().length === 0"
+        (change)="onTranscriptionModelChanged($event)"
+      >
+        @for (model of transcriptionModels(); track model.id) {
+          <option [value]="model.id" [selected]="model.id === selectedTranscriptionModel()">
+            {{ model.label }}{{ model.downloaded ? '' : ' (not downloaded)' }}
+          </option>
+        }
+      </select>
+    </label>
+    <label class="transcription-picker">
+      <span class="language-label">Spoken language</span>
+      <select
+        class="transcription-language-select"
+        aria-label="Transcription language"
+        [disabled]="transcriptionLanguageDisabled()"
+        (change)="onTranscriptionLanguageChanged($event)"
+      >
+        @for (language of transcriptionLanguages(); track language) {
+          <option [value]="language" [selected]="language === selectedTranscriptionLanguage()">
+            {{ language === 'auto' ? 'Auto (let the model decide)' : language }}
+          </option>
+        }
+      </select>
+    </label>
+    @if (transcriptionModelNotDownloaded()) {
+      <p class="transcription-not-downloaded">
+        This model isn't downloaded yet — its files must be downloaded before it can be used.
+      </p>
+    }
+  </section>
+
   <section class="summary-guidelines" aria-label="General summary guidelines">
     <h3>General guidelines</h3>
     <label class="guidelines-helper" for="general-guidelines-input"

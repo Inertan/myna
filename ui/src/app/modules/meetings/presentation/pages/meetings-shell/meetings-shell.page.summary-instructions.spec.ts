@@ -17,6 +17,7 @@ import { InMemoryRecorderFake } from '../../../application/testing/in-memory-rec
 import { InMemorySummarizerFake } from '../../../application/testing/in-memory-summarizer.fake';
 import { InMemoryTemplateRepositoryFake } from '../../../application/testing/in-memory-template-repository.fake';
 import { InMemoryTranscriberFake } from '../../../application/testing/in-memory-transcriber.fake';
+import { InMemoryTranscriptionFake } from '../../../application/testing/in-memory-transcription.fake';
 import { InMemoryUpdatesFake } from '../../../application/testing/in-memory-updates.fake';
 import type { Meeting } from '../../../core/models/meeting.model';
 import { toMeetingId } from '../../../core/models/meeting.model';
@@ -31,6 +32,7 @@ import { RecorderPort } from '../../../core/ports/recorder.port';
 import { SummarizerPort } from '../../../core/ports/summarizer.port';
 import { TemplateRepositoryPort } from '../../../core/ports/template-repository.port';
 import { TranscriberPort } from '../../../core/ports/transcriber.port';
+import { TranscriptionPort } from '../../../core/ports/transcription.port';
 import { UpdatesPort } from '../../../core/ports/updates.port';
 import { flushMicrotasks } from '../../../infrastructure/tauri/testing/tauri-internals.stub';
 import { provideMeetings } from '../../../meetings.providers';
@@ -74,6 +76,7 @@ describe('MeetingsShellPage summary instructions', () => {
         { provide: RecorderPort, useClass: InMemoryRecorderFake },
         { provide: SummarizerPort, useClass: InMemorySummarizerFake },
         { provide: TranscriberPort, useClass: InMemoryTranscriberFake },
+        { provide: TranscriptionPort, useClass: InMemoryTranscriptionFake },
         { provide: TemplateRepositoryPort, useClass: InMemoryTemplateRepositoryFake },
         { provide: ModelsStatusPort, useClass: InMemoryModelsStatusFake },
         { provide: FileDialogPort, useClass: InMemoryFileDialogFake },

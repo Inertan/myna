@@ -9,6 +9,7 @@ import type { MeetingsErrorCode, RecordingState } from '../../core/models/record
 import type { SummaryInstructionsDraft } from '../../core/models/summary-instructions.model';
 import type { SummaryLanguage } from '../../core/models/summary-language.model';
 import type { SummaryTemplate } from '../../core/models/summary-template.model';
+import type { SttModel } from '../../core/models/transcription.model';
 import type { ImportProgress } from '../../core/ports/audio-import.port';
 import type { StorageLocation } from '../../core/ports/storage-location.port';
 import type { SummaryCacheEntry } from './summary-cache.model';
@@ -114,6 +115,11 @@ export interface MeetingsStoreConfig {
   CAPTURE_SOURCE: CaptureSource;
   SUMMARY_LANGUAGES: readonly SummaryLanguage[];
   SELECTED_SUMMARY_LANGUAGE: string;
+  /** The Rust-owned ASR model registry (`list_stt_models`) — never a second hardcoded copy. */
+  TRANSCRIPTION_MODELS: readonly SttModel[];
+  /** The persisted transcription model/language pair; server-side, never localStorage. */
+  SELECTED_TRANSCRIPTION_MODEL: string;
+  SELECTED_TRANSCRIPTION_LANGUAGE: string;
   /** General summary guidelines; the server (via `SummarizerPort.getGuidelines`) is the source of truth — never persisted to `PreferencesPort`. */
   SUMMARY_GUIDELINES: string;
   /** Per-(meeting, template) instruction drafts keyed by `summaryInstructionsKey(...)`; lazily hydrated from `PreferencesPort` on read. */

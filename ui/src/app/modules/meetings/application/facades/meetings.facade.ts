@@ -1,4 +1,4 @@
-/* eslint max-lines: ["error", 480] */
+/* eslint max-lines: ["error", 520] */
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
 
@@ -31,10 +31,12 @@ import { GetStorageLocationUseCase } from '../use-cases/get-storage-location.use
 import { GetSummaryGuidelinesUseCase } from '../use-cases/get-summary-guidelines.usecase';
 import { GetSummaryUseCase } from '../use-cases/get-summary.usecase';
 import { GetTemplatePromptUseCase } from '../use-cases/get-template-prompt.usecase';
+import { GetTranscriptionPrefsUseCase } from '../use-cases/get-transcription-prefs.usecase';
 import { ImportAudioUseCase } from '../use-cases/import-audio.usecase';
 import { ListAudioSourcesUseCase } from '../use-cases/list-audio-sources.usecase';
 import { ListFoldersUseCase } from '../use-cases/list-folders.usecase';
 import { ListMeetingsUseCase } from '../use-cases/list-meetings.usecase';
+import { ListSttModelsUseCase } from '../use-cases/list-stt-models.usecase';
 import { ListSummaryLanguagesUseCase } from '../use-cases/list-summary-languages.usecase';
 import { ListTemplatesUseCase } from '../use-cases/list-templates.usecase';
 import { OpenMeetingUseCase } from '../use-cases/open-meeting.usecase';
@@ -48,6 +50,7 @@ import { SetMeetingFolderUseCase } from '../use-cases/set-meeting-folder.usecase
 import { SetStorageLocationUseCase } from '../use-cases/set-storage-location.usecase';
 import { SetSummaryGuidelinesUseCase } from '../use-cases/set-summary-guidelines.usecase';
 import { SetTemplatePromptUseCase } from '../use-cases/set-template-prompt.usecase';
+import { SetTranscriptionPrefsUseCase } from '../use-cases/set-transcription-prefs.usecase';
 import { StartRecordingUseCase } from '../use-cases/start-recording.usecase';
 import { StopRecordingUseCase } from '../use-cases/stop-recording.usecase';
 import { SummarizeMeetingUseCase } from '../use-cases/summarize-meeting.usecase';
@@ -113,6 +116,9 @@ export class MeetingsFacade {
   private readonly exportMeetingUseCase = inject(ExportMeetingUseCase);
   private readonly checkSystemAudioUseCase = inject(CheckSystemAudioUseCase);
   private readonly listSummaryLanguagesUseCase = inject(ListSummaryLanguagesUseCase);
+  private readonly listSttModelsUseCase = inject(ListSttModelsUseCase);
+  private readonly getTranscriptionPrefsUseCase = inject(GetTranscriptionPrefsUseCase);
+  private readonly setTranscriptionPrefsUseCase = inject(SetTranscriptionPrefsUseCase);
   private readonly getSummaryGuidelinesUseCase = inject(GetSummaryGuidelinesUseCase);
   private readonly setSummaryGuidelinesUseCase = inject(SetSummaryGuidelinesUseCase);
   private readonly getTemplatePromptUseCase = inject(GetTemplatePromptUseCase);
@@ -167,6 +173,9 @@ export class MeetingsFacade {
   readonly captureSource = this.store.captureSource;
   readonly summaryLanguages = this.store.summaryLanguages;
   readonly selectedSummaryLanguage = this.store.selectedSummaryLanguage;
+  readonly transcriptionModels = this.store.transcriptionModels;
+  readonly selectedTranscriptionModel = this.store.selectedTranscriptionModel;
+  readonly selectedTranscriptionLanguage = this.store.selectedTranscriptionLanguage;
   readonly summaryGuidelines = this.store.summaryGuidelines;
   /** Override cache for per-template prompts; absent = built-in — see `templates`. Failures surface via `error`; in-flight names via `templatePromptLoading`. */
   readonly templatePrompts = this.store.templatePrompts;
@@ -347,6 +356,35 @@ export class MeetingsFacade {
   selectSummaryLanguage(code: string): void {
     this.store.setSelectedSummaryLanguage(code);
   }
+
+  /**
+   * Fetches the Rust-owned ASR model list AND the persisted model/language
+   * pair in one guarded load; mirrors `loadSummaryLanguages`, but the pair
+   * is server-persisted rather than localStorage-backed.
+   */
+  loadTranscriptionSettings = (): Promise<void> =>
+    this.guarded(async () => {
+      const [models, prefs] = await Promise.all([
+        this.listSttModelsUseCase.list(),
+        this.getTranscriptionPrefsUseCase.get(),
+      ]);
+      this.store.setTranscriptionModels(models);
+      this.store.setTranscriptionPreferences(prefs);
+    }, 'loadTranscriptionSettings');
+
+  /** Persists the chosen model with the current language, then adopts the server-normalized pair. */
+  selectTranscriptionModel = (model: string): Promise<void> =>
+    this.guarded(async () => {
+      const prefs = await this.setTranscriptionPrefsUseCase.set(model, this.store.selectedTranscriptionLanguage());
+      this.store.setTranscriptionPreferences(prefs);
+    }, 'selectTranscriptionModel');
+
+  /** Persists the chosen language with the current model, then adopts the server-normalized pair. */
+  selectTranscriptionLanguage = (language: string): Promise<void> =>
+    this.guarded(async () => {
+      const prefs = await this.setTranscriptionPrefsUseCase.set(this.store.selectedTranscriptionModel(), language);
+      this.store.setTranscriptionPreferences(prefs);
+    }, 'selectTranscriptionLanguage');
 
   /** Fetches the server-side general guidelines into the store slot; mirrors `loadSummaryLanguages`. */
   loadSummaryGuidelines = (): Promise<void> =>
