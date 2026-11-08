@@ -17,8 +17,7 @@
 
 > **🍴 Fork — personal use only.** This repository is a fork of
 > [Myna](https://github.com/fmflurry/myna) (upstream, by fmflurry), kept for
-> private/personal use. It is **not** a public release channel — build from
-> source below. Upstream issues and releases live at the
+> personal use. Upstream issues and releases live at the
 > upstream repo, not here.
 
 - **[⬇ Build & Install from source](#getting-started)**
