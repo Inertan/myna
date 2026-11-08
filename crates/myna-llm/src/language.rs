@@ -18,7 +18,7 @@ pub struct SummaryLanguage {
 pub const DEFAULT_SUMMARY_LANGUAGE: &str = "en";
 
 /// Curated list of languages Qwen2.5-7B-Instruct handles well.
-pub const SUMMARY_LANGUAGES: [SummaryLanguage; 7] = [
+pub const SUMMARY_LANGUAGES: [SummaryLanguage; 8] = [
     SummaryLanguage {
         code: "en",
         label: "English",
@@ -46,6 +46,10 @@ pub const SUMMARY_LANGUAGES: [SummaryLanguage; 7] = [
     SummaryLanguage {
         code: "nl",
         label: "Dutch",
+    },
+    SummaryLanguage {
+        code: "ru",
+        label: "Russian",
     },
 ];
 

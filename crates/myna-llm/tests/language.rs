@@ -67,7 +67,7 @@ fn default_summary_language_is_present_in_summary_languages() {
 #[test]
 fn summary_languages_includes_the_curated_set() {
     // Arrange
-    let mut expected = vec!["en", "fr", "es", "de", "it", "pt", "nl"];
+    let mut expected = vec!["en", "fr", "es", "de", "it", "pt", "nl", "ru"];
     expected.sort_unstable();
 
     // Act
